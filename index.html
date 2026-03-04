@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DM Fog of War</title>
+  <style>
+    :root {
+      --bg: #141414;
+      --panel: #1f1f1f;
+      --panel-2: #272727;
+      --text: #f2f2f2;
+      --muted: #b9b9b9;
+      --accent: #00c8ff;
+      --danger: #ff6b6b;
+      --border: #3a3a3a;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .top-menu-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #222, #1a1a1a);
+      flex: 0 0 auto;
+      position: relative;
+      z-index: 20;
+    }
+
+    .menu {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .menu > summary {
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .menu > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .menu > summary::after {
+      content: "▾";
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .menu[open] > summary {
+      background: #2f2f2f;
+      border-color: #5b5b5b;
+    }
+
+    .menu[open] > summary::after {
+      content: "▴";
+      color: var(--text);
+    }
+
+    .menu-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      min-width: min(420px, 92vw);
+      max-width: min(760px, 94vw);
+      max-height: min(70vh, 560px);
+      overflow: auto;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(27, 27, 27, 0.98);
+      box-shadow: 0 20px 44px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(4px);
+    }
+
+    .menu.right .menu-panel {
+      left: auto;
+      right: 0;
+    }
+
+    .menu-section {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .menu-section:first-child {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
+
+    .menu-note {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .group {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      max-width: 100%;
+    }
+
+    .group-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-right: 2px;
+    }
+
+    button,
+    input[type="number"] {
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid #4a4a4a;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 12px;
+      font-size: 14px;
+    }
+
+    input[type="range"] {
+      width: 150px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #303030;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    label.option {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    input[type="radio"],
+    input[type="checkbox"] {
+      accent-color: var(--accent);
+    }
+
+    .small-battle-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .small-battle-controls.collapsed {
+      display: none;
+    }
+
+    .menu-pin-row {
+      justify-content: flex-end;
+    }
+
+    .menu-pin-label {
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .pinned-menus {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: #181818;
+      flex: 0 0 auto;
+      overflow: auto;
+    }
+
+    .pinned-menus.hidden {
+      display: none;
+    }
+
+    .pinned-menu-card {
+      display: none;
+      min-width: min(320px, 100%);
+      flex: 1 1 360px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      padding: 10px;
+    }
+
+    .pinned-menu-card.visible {
+      display: block;
+    }
+
+    .pinned-menu-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .pinned-menu-head button {
+      height: 30px;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .pinned-menu-slot {
+      display: block;
+    }
+
+    .menu-dock-home {
+      display: contents;
+    }
+
+    .menu-dock-content {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #statusBar {
+      flex: 0 0 auto;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      background: #171717;
+      font-size: 14px;
+    }
+
+    #dmViewport {
+      flex: 1 1 auto;
+      overflow: auto;
+      position: relative;
+      background:
+        linear-gradient(45deg, rgba(255,255,255,0.02) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.02) 75%),
+        linear-gradient(45deg, rgba(255,255,255,0.02) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.02) 75%),
+        #111;
+      background-position: 0 0, 12px 12px;
+      background-size: 24px 24px;
+    }
+
+    #dmCanvas {
+      display: block;
+      cursor: crosshair;
+      background: #111;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 24px;
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal-card {
+      width: min(560px, 100%);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: #1b1b1b;
+      padding: 22px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .modal-card h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+    }
+
+    .modal-card p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .small-note {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #9f9f9f;
+    }
+
+    .accent {
+      color: var(--accent);
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+
+    .value-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 56px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-menu-bar">
+    <details class="menu" data-menu-key="session">
+      <summary>Session & Windows</summary>
+      <div class="menu-panel">
+        <div class="menu-section menu-pin-row">
+          <label class="option menu-pin-label"><input class="menu-pin-toggle" data-menu-key="session" type="checkbox" /> Keep below menu bar</label>
+        </div>
+        <div class="menu-dock-home"><div class="menu-dock-content" data-menu-key="session">
+        <div class="menu-section">
+          <div class="group">
+            <button id="startBtn">Start / Choose Map</button>
+            <button id="openMapBtn">Open Map</button>
+            <button id="saveBtn">Save Session</button>
+            <button id="loadBtn">Load Session</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="group">
+            <button id="openPlayerBtn">Open Player Window</button>
+            <button id="fullscreenBtn">Toggle Player Fullscreen</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="menu-note">Map, session, and player-window controls are grouped here so setup is easy at the start of a game.</div>
+        </div>
+        </div></div>
+      </div>
+    </details>
+
+    <details class="menu" data-menu-key="fog">
+      <summary>Fog Tools</summary>
+      <div class="menu-panel">
+        <div class="menu-section menu-pin-row">
+          <label class="option menu-pin-label"><input class="menu-pin-toggle" data-menu-key="fog" type="checkbox" /> Keep below menu bar</label>
+        </div>
+        <div class="menu-dock-home"><div class="menu-dock-content" data-menu-key="fog">
+        <div class="menu-section">
+          <div class="group">
+            <span class="group-label">Tool</span>
+            <label class="option"><input type="radio" name="tool" value="rectangle" checked /> Square</label>
+            <label class="option"><input type="radio" name="tool" value="oval" /> Oval</label>
+            <label class="option"><input type="radio" name="tool" value="brush" /> Freeform</label>
+            <label class="option"><input type="radio" name="tool" value="calibrate" /> Calibrate Grid</label>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="group">
+            <span class="group-label">Mode</span>
+            <label class="option"><input type="radio" name="mode" value="reveal" checked /> Reveal</label>
+            <label class="option"><input type="radio" name="mode" value="hide" /> Hide</label>
+          </div>
+          <div class="group">
+            <span class="group-label">Brush radius</span>
+            <input id="brushRadius" type="number" min="5" max="300" step="1" value="35" />
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="group">
+            <button id="revealAllBtn">Reveal All</button>
+            <button id="coverAllBtn">Cover All</button>
+          </div>
+          <div class="group">
+            <span class="group-label" id="gridLabel">Grid: not calibrated</span>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="menu-note">Pick a shape, choose reveal or hide, and drag on the map. Use Calibrate Grid by dragging across one map square.</div>
+        </div>
+        </div></div>
+      </div>
+    </details>
+
+    <details class="menu" data-menu-key="view">
+      <summary>View & Position</summary>
+      <div class="menu-panel">
+        <div class="menu-section menu-pin-row">
+          <label class="option menu-pin-label"><input class="menu-pin-toggle" data-menu-key="view" type="checkbox" /> Keep below menu bar</label>
+        </div>
+        <div class="menu-dock-home"><div class="menu-dock-content" data-menu-key="view">
+        <div class="menu-section">
+          <div class="group">
+            <button id="fitBtn">Fit Player to Screen</button>
+          </div>
+          <div class="group">
+            <label class="option"><input id="compassToggle" type="checkbox" /> Compass Rose</label>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="group">
+            <span class="group-label">DM Zoom</span>
+            <input id="dmZoomSlider" type="range" min="25" max="300" step="5" value="100" />
+            <span id="dmZoomValue" class="value-badge">100%</span>
+          </div>
+          <div class="group">
+            <span class="group-label">Player Scale</span>
+            <input id="playerScaleSlider" type="range" min="25" max="300" step="1" value="100" />
+            <span id="playerScaleValue" class="value-badge">100%</span>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="group">
+            <span class="group-label">Map Rotate</span>
+            <button id="mapRotateCcwBtn">↺</button>
+            <button id="mapRotateCwBtn">↻</button>
+            <span id="mapRotationValue" class="value-badge">0°</span>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="group">
+            <span class="group-label">Pan Player</span>
+            <button id="panLeftBtn">←</button>
+            <button id="panUpBtn">↑</button>
+            <button id="panDownBtn">↓</button>
+            <button id="panRightBtn">→</button>
+            <button id="resetViewBtn">Reset View</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="menu-note">These controls handle zoom, rotation, centering, and the player-facing orientation tools.</div>
+        </div>
+        </div></div>
+      </div>
+    </details>
+
+    <details class="menu right" data-menu-key="battle">
+      <summary>Small Screen Battlemap</summary>
+      <div class="menu-panel">
+        <div class="menu-section menu-pin-row">
+          <label class="option menu-pin-label"><input class="menu-pin-toggle" data-menu-key="battle" type="checkbox" /> Keep below menu bar</label>
+        </div>
+        <div class="menu-dock-home"><div class="menu-dock-content" data-menu-key="battle">
+        <div class="menu-section">
+          <div class="group">
+            <button id="smallBattleBtn">Small Screen Battlemap</button>
+            <button id="clearSmallBattleBtn">Clear Battlemap</button>
+            <button id="toggleSmallBattleControlsBtn">Hide Battle Controls</button>
+          </div>
+        </div>
+
+        <div id="smallBattleControls" class="small-battle-controls">
+          <div class="menu-section">
+            <div class="group">
+              <span class="group-label">Battle Grid</span>
+              <input id="battleColsInput" type="number" min="1" max="60" step="1" value="13" style="width:70px" />
+              <span>×</span>
+              <input id="battleRowsInput" type="number" min="1" max="60" step="1" value="8" style="width:70px" />
+            </div>
+          </div>
+
+          <div class="menu-section">
+            <div class="group">
+              <span class="group-label">Rotate</span>
+              <button id="battleRotateCcwBtn">↺</button>
+              <button id="battleRotateCwBtn">↻</button>
+            </div>
+
+            <div class="group">
+              <span class="group-label">Grid Color</span>
+              <label class="option"><input type="radio" name="battleGridColor" value="white" checked /> White</label>
+              <label class="option"><input type="radio" name="battleGridColor" value="black" /> Black</label>
+            </div>
+          </div>
+
+          <div class="menu-section">
+            <div class="group">
+              <span class="group-label">Battle Blur</span>
+              <input id="battleBlurSlider" type="range" min="0" max="12" step="0.25" value="1.5" />
+              <span id="battleBlurValue" class="value-badge">1.5px</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-section">
+          <div class="menu-note">Use this when a room is too large for the physical player display. Select an area, optionally rotate it, blur the old grid, and overlay a new battle grid.</div>
+        </div>
+        </div></div>
+      </div>
+    </details>
+  </div>
+
+  <div id="pinnedMenusBar" class="pinned-menus hidden">
+    <section class="pinned-menu-card" data-menu-key="session">
+      <div class="pinned-menu-head">
+        <span>Session &amp; Windows</span>
+        <button type="button" class="undock-menu-btn" data-menu-key="session">Hide Panel</button>
+      </div>
+      <div class="pinned-menu-slot"></div>
+    </section>
+
+    <section class="pinned-menu-card" data-menu-key="fog">
+      <div class="pinned-menu-head">
+        <span>Fog Tools</span>
+        <button type="button" class="undock-menu-btn" data-menu-key="fog">Hide Panel</button>
+      </div>
+      <div class="pinned-menu-slot"></div>
+    </section>
+
+    <section class="pinned-menu-card" data-menu-key="view">
+      <div class="pinned-menu-head">
+        <span>View &amp; Position</span>
+        <button type="button" class="undock-menu-btn" data-menu-key="view">Hide Panel</button>
+      </div>
+      <div class="pinned-menu-slot"></div>
+    </section>
+
+    <section class="pinned-menu-card" data-menu-key="battle">
+      <div class="pinned-menu-head">
+        <span>Small Screen Battlemap</span>
+        <button type="button" class="undock-menu-btn" data-menu-key="battle">Hide Panel</button>
+      </div>
+      <div class="pinned-menu-slot"></div>
+    </section>
+  </div>
+
+  <div id="statusBar">Click <span class="accent">Start / Choose Map</span> to open the Player window and load a map.</div>
+
+  <div id="dmViewport">
+    <canvas id="dmCanvas" width="1200" height="800"></canvas>
+  </div>
+
+  <input id="mapInput" type="file" accept="image/*" hidden />
+  <input id="sessionInput" type="file" accept=".fow,application/json" hidden />
+
+  <div id="startupModal" class="modal">
+    <div class="modal-card">
+      <h1>DM Fog of War</h1>
+      <p>
+        This HTML version gives you the same core workflow as the Python app: a DM view, a separate Player window,
+        fog-of-war tools, grid calibration, and save/load support.
+      </p>
+      <p>
+        Because browsers block popups and file pickers unless triggered by a click,
+        use the button below to open the Player window and choose your map.
+      </p>
+      <div class="modal-actions">
+        <button id="modalStartBtn">Start / Choose Map</button>
+        <button id="modalPlayerBtn">Open Player Window Only</button>
+      </div>
+      <div class="small-note">
+        Best results: keep browser zoom at <span class="accent">100%</span>, allow popups for this file, and move the Player window to your second screen.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const dmCanvas = document.getElementById('dmCanvas');
+      const dmCtx = dmCanvas.getContext('2d');
+      const dmViewport = document.getElementById('dmViewport');
+      const mapInput = document.getElementById('mapInput');
+      const sessionInput = document.getElementById('sessionInput');
+      const statusBar = document.getElementById('statusBar');
+      const gridLabel = document.getElementById('gridLabel');
+      const startupModal = document.getElementById('startupModal');
+      const brushRadiusInput = document.getElementById('brushRadius');
+      const dmZoomSlider = document.getElementById('dmZoomSlider');
+      const dmZoomValue = document.getElementById('dmZoomValue');
+      const playerScaleSlider = document.getElementById('playerScaleSlider');
+      const playerScaleValue = document.getElementById('playerScaleValue');
+      const mapRotationValue = document.getElementById('mapRotationValue');
+      const compassToggle = document.getElementById('compassToggle');
+      const toggleSmallBattleControlsBtn = document.getElementById('toggleSmallBattleControlsBtn');
+      const smallBattleControls = document.getElementById('smallBattleControls');
+      const battleColsInput = document.getElementById('battleColsInput');
+      const battleRowsInput = document.getElementById('battleRowsInput');
+      const battleBlurSlider = document.getElementById('battleBlurSlider');
+      const battleBlurValue = document.getElementById('battleBlurValue');
+
+      const maskCanvas = document.createElement('canvas');
+      const maskCtx = maskCanvas.getContext('2d');
+
+      const state = {
+        mapImage: null,
+        mapName: '',
+        mapDataUrl: null,
+        mapWidth: 0,
+        mapHeight: 0,
+        tool: 'rectangle',
+        mode: 'reveal',
+        brushRadius: 35,
+        dmZoom: 1,
+        mapRotation: 0,
+        showCompass: false,
+        gridCellPx: null,
+        playerFitMode: true,
+        playerScaleAdjust: 1,
+        playerScale: 1,
+        playerViewX: 0,
+        playerViewY: 0,
+        dragging: false,
+        dragStart: null,
+        strokePoints: [],
+        preview: null,
+        smallBattle: {
+          armed: false,
+          active: false,
+          selection: null,
+          draftSelection: null,
+          rotation: 0,
+          gridCols: 13,
+          gridRows: 8,
+          blurPx: 1.5,
+          gridColor: 'white',
+          controlsCollapsed: false,
+        },
+        playerWin: null,
+        playerCanvas: null,
+        playerCtx: null,
+        playerResizeHandler: null,
+        playerCompassCanvas: null,
+        playerCompassCtx: null,
+        pinnedMenus: {
+          session: false,
+          fog: false,
+          view: false,
+          battle: false,
+        },
+      };
+
+      const menuDropdowns = Array.from(document.querySelectorAll('.menu'));
+      const pinnedMenusBar = document.getElementById('pinnedMenusBar');
+      const menuPinToggles = Array.from(document.querySelectorAll('.menu-pin-toggle'));
+      const undockMenuButtons = Array.from(document.querySelectorAll('.undock-menu-btn'));
+      const menuDockMeta = new Map(
+        Array.from(document.querySelectorAll('.menu-dock-content')).map((content) => {
+          const menuKey = content.dataset.menuKey;
+          const card = document.querySelector(`.pinned-menu-card[data-menu-key="${menuKey}"]`);
+          return [menuKey, {
+            content,
+            home: content.parentElement,
+            card,
+            slot: card ? card.querySelector('.pinned-menu-slot') : null,
+          }];
+        })
+      );
+
+      function closeAllMenus(exceptMenu = null) {
+        for (const menu of menuDropdowns) {
+          if (menu !== exceptMenu) {
+            menu.open = false;
+          }
+        }
+      }
+
+      function syncPinnedMenusUI() {
+        let anyPinned = false;
+        for (const [menuKey, meta] of menuDockMeta.entries()) {
+          const isPinned = !!state.pinnedMenus[menuKey];
+          const target = isPinned ? meta.slot : meta.home;
+          if (target && meta.content.parentElement !== target) {
+            target.appendChild(meta.content);
+          }
+          if (meta.card) {
+            meta.card.classList.toggle('visible', isPinned);
+          }
+          if (isPinned) {
+            anyPinned = true;
+          }
+        }
+
+        menuPinToggles.forEach((toggle) => {
+          toggle.checked = !!state.pinnedMenus[toggle.dataset.menuKey];
+        });
+
+        pinnedMenusBar.classList.toggle('hidden', !anyPinned);
+      }
+
+      function setMenuPinned(menuKey, shouldPin) {
+        if (!(menuKey in state.pinnedMenus)) return;
+        state.pinnedMenus[menuKey] = !!shouldPin;
+        syncPinnedMenusUI();
+      }
+
+      function setStatus(message) {
+        statusBar.textContent = message;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function hasMap() {
+        return !!state.mapImage;
+      }
+
+      function updateDMZoomLabel() {
+        dmZoomValue.textContent = `${Math.round(state.dmZoom * 100)}%`;
+      }
+
+      function updatePlayerScaleLabel() {
+        playerScaleValue.textContent = `${Math.round(state.playerScaleAdjust * 100)}%`;
+      }
+
+      function updateBattleBlurLabel() {
+        battleBlurValue.textContent = `${state.smallBattle.blurPx.toFixed(2).replace(/\.00$/, '')}px`;
+      }
+
+      function sanitizePositiveInt(value, fallback, min = 1, max = 60) {
+        const parsed = parseInt(value, 10);
+        if (!Number.isFinite(parsed)) return fallback;
+        return clamp(parsed, min, max);
+      }
+
+      function getSmallBattleRotationLabel() {
+        const turns = ((state.smallBattle.rotation % 4) + 4) % 4;
+        if (turns === 1) return '90° CW';
+        if (turns === 2) return '180°';
+        if (turns === 3) return '90° CCW';
+        return '0°';
+      }
+
+      function getRotationTurns(value = state.mapRotation) {
+        return ((value % 4) + 4) % 4;
+      }
+
+      function getRotationLabel(value = state.mapRotation) {
+        const turns = getRotationTurns(value);
+        if (turns === 1) return '90° CW';
+        if (turns === 2) return '180°';
+        if (turns === 3) return '90° CCW';
+        return '0°';
+      }
+
+      function updateMapRotationLabel() {
+        mapRotationValue.textContent = getRotationLabel();
+      }
+
+      function getRotatedDimensions(width, height, turns = state.mapRotation) {
+        return (getRotationTurns(turns) % 2 === 0)
+          ? { width, height }
+          : { width: height, height: width };
+      }
+
+      function getRotatedMapDimensions() {
+        return getRotatedDimensions(state.mapWidth, state.mapHeight, state.mapRotation);
+      }
+
+      function applyRotationTransform(ctx, turns, width, height) {
+        const normalized = getRotationTurns(turns);
+        if (normalized === 1) {
+          ctx.translate(height, 0);
+          ctx.rotate(Math.PI / 2);
+        } else if (normalized === 2) {
+          ctx.translate(width, height);
+          ctx.rotate(Math.PI);
+        } else if (normalized === 3) {
+          ctx.translate(0, width);
+          ctx.rotate(-Math.PI / 2);
+        }
+      }
+
+      function originalToRotatedPoint(point, turns = state.mapRotation) {
+        const normalized = getRotationTurns(turns);
+        if (normalized === 1) {
+          return { x: state.mapHeight - 1 - point.y, y: point.x };
+        }
+        if (normalized === 2) {
+          return { x: state.mapWidth - 1 - point.x, y: state.mapHeight - 1 - point.y };
+        }
+        if (normalized === 3) {
+          return { x: point.y, y: state.mapWidth - 1 - point.x };
+        }
+        return { x: point.x, y: point.y };
+      }
+
+      function rotatedToOriginalPoint(point, turns = state.mapRotation) {
+        const normalized = getRotationTurns(turns);
+        if (normalized === 1) {
+          return { x: point.y, y: state.mapHeight - 1 - point.x };
+        }
+        if (normalized === 2) {
+          return { x: state.mapWidth - 1 - point.x, y: state.mapHeight - 1 - point.y };
+        }
+        if (normalized === 3) {
+          return { x: state.mapWidth - 1 - point.y, y: point.x };
+        }
+        return { x: point.x, y: point.y };
+      }
+
+      function syncSmallBattleControlsUI() {
+        const collapsed = !!state.smallBattle.controlsCollapsed;
+        smallBattleControls.classList.toggle('collapsed', collapsed);
+        toggleSmallBattleControlsBtn.textContent = collapsed ? 'Show Battle Controls' : 'Hide Battle Controls';
+      }
+
+      function getPlayerDisplayRotation() {
+        if (state.smallBattle.active && state.smallBattle.selection) {
+          return getRotationTurns(state.mapRotation + state.smallBattle.rotation);
+        }
+        return getRotationTurns(state.mapRotation);
+      }
+
+      function drawCompassOverlay(ctx, canvasW, canvasH, turns) {
+        if (!state.showCompass) return;
+
+        const overlayMode = Math.min(canvasW, canvasH) <= 220;
+        const size = overlayMode
+          ? Math.min(canvasW, canvasH) * 0.72
+          : Math.max(56, Math.min(canvasW, canvasH) * 0.11);
+        const pad = overlayMode ? Math.max(8, Math.min(canvasW, canvasH) * 0.14) : Math.max(10, size * 0.18);
+        const x = canvasW - size - pad;
+        const y = pad;
+        const cx = x + (size / 2);
+        const cy = y + (size / 2);
+        const radius = size * 0.33;
+        const fontSize = Math.max(11, Math.round(size * 0.17));
+
+        function rotateVec(dx, dy) {
+          let vx = dx;
+          let vy = dy;
+          const count = getRotationTurns(turns);
+          for (let i = 0; i < count; i += 1) {
+            const nextX = -vy;
+            const nextY = vx;
+            vx = nextX;
+            vy = nextY;
+          }
+          return { x: vx, y: vy };
+        }
+
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.lineWidth = Math.max(2, size * 0.03);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(x, y, size, size, Math.max(10, size * 0.18));
+        } else {
+          ctx.rect(x, y, size, size);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        const labels = [
+          ['N', 0, -1, true],
+          ['E', 1, 0, false],
+          ['S', 0, 1, false],
+          ['W', -1, 0, false],
+        ];
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = Math.max(1.25, size * 0.02);
+        for (const [, dx, dy] of labels) {
+          const v = rotateVec(dx, dy);
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx + (v.x * radius * 0.9), cy + (v.y * radius * 0.9));
+          ctx.stroke();
+        }
+
+        const north = rotateVec(0, -1);
+        ctx.strokeStyle = '#ff6b6b';
+        ctx.lineWidth = Math.max(2.2, size * 0.035);
+        ctx.beginPath();
+        ctx.moveTo(cx - (north.x * radius * 0.18), cy - (north.y * radius * 0.18));
+        ctx.lineTo(cx + (north.x * radius * 0.95), cy + (north.y * radius * 0.95));
+        ctx.stroke();
+
+        const tipX = cx + (north.x * radius * 1.05);
+        const tipY = cy + (north.y * radius * 1.05);
+        const left = rotateVec(-0.3, -0.5);
+        const right = rotateVec(0.3, -0.5);
+        ctx.fillStyle = '#ff6b6b';
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX + (left.x * size * 0.12), tipY + (left.y * size * 0.12));
+        ctx.lineTo(tipX + (right.x * size * 0.12), tipY + (right.y * size * 0.12));
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const [label, dx, dy, isNorth] of labels) {
+          const v = rotateVec(dx, dy);
+          ctx.fillStyle = isNorth ? '#ffb3b3' : '#ffffff';
+          ctx.fillText(label, cx + (v.x * radius * 1.22), cy + (v.y * radius * 1.22));
+        }
+        ctx.restore();
+      }
+
+      function updateRotatedCanvasSize() {
+        if (!hasMap()) return;
+        const dims = getRotatedMapDimensions();
+        dmCanvas.width = dims.width;
+        dmCanvas.height = dims.height;
+      }
+
+      function applyGlobalMapRotation(delta) {
+        state.mapRotation = getRotationTurns(state.mapRotation + delta);
+        updateMapRotationLabel();
+        if (hasMap()) {
+          updateRotatedCanvasSize();
+          applyDMZoom();
+          renderDM();
+          renderPlayer();
+          setStatus(`Map rotation set to ${getRotationLabel()} for both DM and player views.`);
+        } else {
+          renderDM();
+          renderPlayer();
+          setStatus(`Map rotation set to ${getRotationLabel()}. Open a map to use it.`);
+        }
+      }
+
+      function applyDMZoom(preserveView = true) {
+        const dims = hasMap() ? getRotatedMapDimensions() : { width: dmCanvas.width, height: dmCanvas.height };
+        const baseWidth = dims.width;
+        const baseHeight = dims.height;
+        const oldDisplayWidth = dmCanvas.getBoundingClientRect().width || (baseWidth * state.dmZoom);
+        const oldDisplayHeight = dmCanvas.getBoundingClientRect().height || (baseHeight * state.dmZoom);
+
+        let centerX = 0;
+        let centerY = 0;
+        if (preserveView && hasMap() && oldDisplayWidth > 0 && oldDisplayHeight > 0) {
+          centerX = ((dmViewport.scrollLeft + (dmViewport.clientWidth / 2)) / oldDisplayWidth) * baseWidth;
+          centerY = ((dmViewport.scrollTop + (dmViewport.clientHeight / 2)) / oldDisplayHeight) * baseHeight;
+        }
+
+        const displayWidth = Math.max(1, Math.round(baseWidth * state.dmZoom));
+        const displayHeight = Math.max(1, Math.round(baseHeight * state.dmZoom));
+        dmCanvas.style.width = `${displayWidth}px`;
+        dmCanvas.style.height = `${displayHeight}px`;
+        updateDMZoomLabel();
+
+        if (preserveView && hasMap()) {
+          const nextLeft = ((centerX / baseWidth) * displayWidth) - (dmViewport.clientWidth / 2);
+          const nextTop = ((centerY / baseHeight) * displayHeight) - (dmViewport.clientHeight / 2);
+          const maxLeft = Math.max(0, displayWidth - dmViewport.clientWidth);
+          const maxTop = Math.max(0, displayHeight - dmViewport.clientHeight);
+          dmViewport.scrollLeft = clamp(nextLeft, 0, maxLeft);
+          dmViewport.scrollTop = clamp(nextTop, 0, maxTop);
+        }
+      }
+
+      function normalizedBox(a, b) {
+        const x1 = Math.min(a.x, b.x);
+        const y1 = Math.min(a.y, b.y);
+        const x2 = Math.max(a.x, b.x);
+        const y2 = Math.max(a.y, b.y);
+        return { x1, y1, x2, y2, w: x2 - x1, h: y2 - y1 };
+      }
+
+      function canvasPointFromEvent(event) {
+        const rect = dmCanvas.getBoundingClientRect();
+        const safeWidth = Math.max(1, rect.width);
+        const safeHeight = Math.max(1, rect.height);
+        const relX = (event.clientX - rect.left) / safeWidth;
+        const relY = (event.clientY - rect.top) / safeHeight;
+        const dims = getRotatedMapDimensions();
+        const rx = clamp(Math.round(relX * dims.width), 0, Math.max(0, dims.width - 1));
+        const ry = clamp(Math.round(relY * dims.height), 0, Math.max(0, dims.height - 1));
+        const original = rotatedToOriginalPoint({ x: rx, y: ry });
+        const x = clamp(original.x, 0, Math.max(0, state.mapWidth - 1));
+        const y = clamp(original.y, 0, Math.max(0, state.mapHeight - 1));
+        return { x, y };
+      }
+
+      function initializeMask() {
+        maskCanvas.width = state.mapWidth;
+        maskCanvas.height = state.mapHeight;
+        maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+        maskCtx.globalCompositeOperation = 'source-over';
+        maskCtx.fillStyle = '#000';
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+      }
+
+      function loadImageFromDataUrl(dataUrl) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('Could not load image data.'));
+          img.src = dataUrl;
+        });
+      }
+
+      async function loadMapData(dataUrl, fileName = 'map') {
+        try {
+          const img = await loadImageFromDataUrl(dataUrl);
+          state.mapImage = img;
+          state.mapName = fileName || 'map';
+          state.mapDataUrl = dataUrl;
+          state.mapWidth = img.naturalWidth || img.width;
+          state.mapHeight = img.naturalHeight || img.height;
+          state.mapRotation = 0;
+          state.gridCellPx = null;
+          state.playerFitMode = true;
+          state.playerScaleAdjust = 1;
+          state.playerScale = 1;
+          state.playerViewX = 0;
+          state.playerViewY = 0;
+          state.dragging = false;
+          state.dragStart = null;
+          state.strokePoints = [];
+          state.preview = null;
+          state.smallBattle.armed = false;
+          state.smallBattle.active = false;
+          state.smallBattle.selection = null;
+          state.smallBattle.draftSelection = null;
+
+          updateMapRotationLabel();
+          updateRotatedCanvasSize();
+          initializeMask();
+          updateGridLabel();
+          dmZoomSlider.value = String(Math.round(state.dmZoom * 100));
+          playerScaleSlider.value = String(Math.round(state.playerScaleAdjust * 100));
+          battleColsInput.value = String(state.smallBattle.gridCols);
+          battleRowsInput.value = String(state.smallBattle.gridRows);
+          battleBlurSlider.value = String(state.smallBattle.blurPx);
+          compassToggle.checked = state.showCompass;
+          updatePlayerScaleLabel();
+          updateBattleBlurLabel();
+          syncSmallBattleControlsUI();
+          applyDMZoom(false);
+          renderDM();
+          ensurePlayerWindow(false);
+          renderPlayer();
+          startupModal.classList.add('hidden');
+
+          setStatus(`Loaded ${state.mapName}. Use Square / Oval / Freeform to reveal or hide areas. Use Calibrate Grid to drag over one grid square.`);
+        } catch (error) {
+          console.error(error);
+          setStatus('Could not load that map image.');
+          alert('Could not load that map image.');
+        }
+      }
+
+      function updateGridLabel() {
+        if (state.gridCellPx && Number.isFinite(state.gridCellPx)) {
+          gridLabel.textContent = `Grid: ${state.gridCellPx.toFixed(2)} px per square`;
+        } else {
+          gridLabel.textContent = 'Grid: not calibrated';
+        }
+      }
+
+      function ensurePlayerWindow(focusIt = true) {
+        if (state.playerWin && !state.playerWin.closed) {
+          if (focusIt) state.playerWin.focus();
+          return true;
+        }
+
+        const win = window.open('', 'dmFogOfWarPlayer', 'popup=yes,width=1200,height=900');
+        if (!win) {
+          setStatus('Popup blocked. Allow popups for this page, then click Open Player Window again.');
+          alert('Popup blocked. Allow popups for this page, then try again.');
+          return false;
+        }
+
+        const doc = win.document;
+        doc.open();
+        doc.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Player View</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+    body { position: relative; }
+    canvas { display: block; width: 100%; height: 100%; background: #000; }
+    #playerCompassCanvas {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      width: 88px;
+      height: 88px;
+      background: transparent;
+      pointer-events: none;
+      display: none;
+    }
+    #hint {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      pointer-events: none;
+    }
+    #playerFullscreenBtn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid #555;
+      background: rgba(32, 32, 32, 0.9);
+      color: #fff;
+      padding: 0 12px;
+      cursor: pointer;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="playerCanvas"></canvas>
+  <canvas id="playerCompassCanvas"></canvas>
+  <div id="hint">Player View</div>
+  <button id="playerFullscreenBtn" type="button">Fullscreen</button>
+</body>
+</html>`);
+        doc.close();
+
+        state.playerWin = win;
+        state.playerCanvas = doc.getElementById('playerCanvas');
+        state.playerCtx = state.playerCanvas.getContext('2d');
+        state.playerCompassCanvas = doc.getElementById('playerCompassCanvas');
+        state.playerCompassCtx = state.playerCompassCanvas.getContext('2d');
+
+        const resizeHandler = () => {
+          if (!state.playerWin || state.playerWin.closed || !state.playerCanvas) return;
+          const dpr = state.playerWin.devicePixelRatio || 1;
+          const w = Math.max(1, Math.floor(state.playerWin.innerWidth * dpr));
+          const h = Math.max(1, Math.floor(state.playerWin.innerHeight * dpr));
+          state.playerCanvas.width = w;
+          state.playerCanvas.height = h;
+          if (state.playerCompassCanvas) {
+            state.playerCompassCanvas.width = Math.max(1, Math.floor(88 * dpr));
+            state.playerCompassCanvas.height = Math.max(1, Math.floor(88 * dpr));
+          }
+          renderPlayer();
+        };
+
+        state.playerResizeHandler = resizeHandler;
+        win.addEventListener('resize', resizeHandler);
+        win.addEventListener('beforeunload', () => {
+          state.playerWin = null;
+          state.playerCanvas = null;
+          state.playerCtx = null;
+          state.playerCompassCanvas = null;
+          state.playerCompassCtx = null;
+          state.playerResizeHandler = null;
+          setStatus('Player window closed. Click Open Player Window to reopen it.');
+        });
+
+        const fsBtn = doc.getElementById('playerFullscreenBtn');
+        fsBtn.addEventListener('click', async () => {
+          try {
+            if (doc.fullscreenElement) {
+              await doc.exitFullscreen();
+            } else {
+              await doc.documentElement.requestFullscreen();
+            }
+          } catch (error) {
+            console.error(error);
+          }
+        });
+
+        resizeHandler();
+        drawPlayerWaitingScreen();
+        if (focusIt) win.focus();
+        setStatus('Player window opened. Move it to your player screen if needed.');
+        return true;
+      }
+
+      function drawPlayerWaitingScreen() {
+        if (!state.playerCtx || !state.playerCanvas) return;
+        const ctx = state.playerCtx;
+        ctx.clearRect(0, 0, state.playerCanvas.width, state.playerCanvas.height);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, state.playerCanvas.width, state.playerCanvas.height);
+        if (state.playerCompassCanvas && state.playerCompassCtx) {
+          state.playerCompassCanvas.style.display = state.showCompass ? 'block' : 'none';
+          state.playerCompassCtx.setTransform(1, 0, 0, 1, 0, 0);
+          state.playerCompassCtx.clearRect(0, 0, state.playerCompassCanvas.width, state.playerCompassCanvas.height);
+          if (state.showCompass) {
+            drawCompassOverlay(state.playerCompassCtx, state.playerCompassCanvas.width, state.playerCompassCanvas.height, getPlayerDisplayRotation());
+          }
+        }
+      }
+
+      function getPlayerPixelsPerInch() {
+        if (!state.playerWin || state.playerWin.closed) return 96;
+        try {
+          const doc = state.playerWin.document;
+          const probe = doc.createElement('div');
+          probe.style.position = 'absolute';
+          probe.style.left = '-1000in';
+          probe.style.top = '0';
+          probe.style.width = '1in';
+          probe.style.height = '1in';
+          probe.style.pointerEvents = 'none';
+          doc.body.appendChild(probe);
+          const rect = probe.getBoundingClientRect();
+          probe.remove();
+          const dpr = state.playerWin.devicePixelRatio || 1;
+          const cssPx = rect.width || 96;
+          return Math.max(1, cssPx * dpr);
+        } catch (error) {
+          return 96;
+        }
+      }
+
+      function getPlayerTransform() {
+        if (!state.playerCanvas || !hasMap()) {
+          return null;
+        }
+
+        const canvasW = state.playerCanvas.width;
+        const canvasH = state.playerCanvas.height;
+        const rotatedDims = getRotatedMapDimensions();
+        let baseScale = 1;
+
+        if (state.playerFitMode || !state.gridCellPx) {
+          baseScale = Math.min(canvasW / rotatedDims.width, canvasH / rotatedDims.height);
+          if (!Number.isFinite(baseScale) || baseScale <= 0) baseScale = 1;
+        } else {
+          const ppi = getPlayerPixelsPerInch();
+          baseScale = ppi / state.gridCellPx;
+          if (!Number.isFinite(baseScale) || baseScale <= 0) baseScale = 1;
+        }
+
+        let scale = baseScale * state.playerScaleAdjust;
+        if (!Number.isFinite(scale) || scale <= 0) scale = baseScale;
+
+        const renderedW = rotatedDims.width * scale;
+        const renderedH = rotatedDims.height * scale;
+        const maxX = Math.max(0, renderedW - canvasW);
+        const maxY = Math.max(0, renderedH - canvasH);
+
+        state.playerScale = scale;
+        state.playerViewX = clamp(state.playerViewX, 0, maxX);
+        state.playerViewY = clamp(state.playerViewY, 0, maxY);
+
+        const drawX = renderedW <= canvasW ? (canvasW - renderedW) / 2 : -state.playerViewX;
+        const drawY = renderedH <= canvasH ? (canvasH - renderedH) / 2 : -state.playerViewY;
+
+        return { canvasW, canvasH, scale, renderedW, renderedH, drawX, drawY, maxX, maxY };
+      }
+
+      function createSelectionCanvas(source, selection, rotation = 0) {
+        if (!selection) return null;
+
+        const cropW = Math.max(1, Math.round(selection.w));
+        const cropH = Math.max(1, Math.round(selection.h));
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = cropW;
+        cropCanvas.height = cropH;
+        const cropCtx = cropCanvas.getContext('2d');
+        cropCtx.imageSmoothingEnabled = true;
+        cropCtx.drawImage(source, selection.x1, selection.y1, cropW, cropH, 0, 0, cropW, cropH);
+
+        const turns = ((rotation % 4) + 4) % 4;
+        if (turns === 0) {
+          return cropCanvas;
+        }
+
+        const rotated = document.createElement('canvas');
+        rotated.width = (turns % 2 === 0) ? cropW : cropH;
+        rotated.height = (turns % 2 === 0) ? cropH : cropW;
+        const rctx = rotated.getContext('2d');
+        rctx.imageSmoothingEnabled = true;
+
+        if (turns === 1) {
+          rctx.translate(rotated.width, 0);
+          rctx.rotate(Math.PI / 2);
+        } else if (turns === 2) {
+          rctx.translate(rotated.width, rotated.height);
+          rctx.rotate(Math.PI);
+        } else if (turns === 3) {
+          rctx.translate(0, rotated.height);
+          rctx.rotate(-Math.PI / 2);
+        }
+
+        rctx.drawImage(cropCanvas, 0, 0);
+        return rotated;
+      }
+
+      function drawSmallBattleGrid(ctx, canvasW, canvasH) {
+        const cols = sanitizePositiveInt(state.smallBattle.gridCols, 13);
+        const rows = sanitizePositiveInt(state.smallBattle.gridRows, 8);
+        const color = state.smallBattle.gridColor === 'black' ? '#000' : '#fff';
+        const alpha = state.smallBattle.gridColor === 'black' ? 0.9 : 0.95;
+        const stepX = canvasW / cols;
+        const stepY = canvasH / rows;
+
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = Math.max(1, Math.round(Math.min(stepX, stepY) * 0.04));
+        ctx.beginPath();
+
+        for (let i = 0; i <= cols; i += 1) {
+          const x = Math.round(i * stepX) + 0.5;
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvasH);
+        }
+
+        for (let i = 0; i <= rows; i += 1) {
+          const y = Math.round(i * stepY) + 0.5;
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvasW, y);
+        }
+
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function renderSmallBattlemap(ctx, canvasW, canvasH) {
+        const selection = state.smallBattle.selection;
+        if (!selection) return;
+
+        const combinedRotation = getRotationTurns(state.mapRotation + state.smallBattle.rotation);
+        const mapSlice = createSelectionCanvas(state.mapImage, selection, combinedRotation);
+        const maskSlice = createSelectionCanvas(maskCanvas, selection, combinedRotation);
+        if (!mapSlice || !maskSlice) return;
+
+        ctx.imageSmoothingEnabled = true;
+        const blurAmount = clamp(Number(state.smallBattle.blurPx) || 0, 0, 12);
+        ctx.filter = blurAmount > 0 ? `blur(${blurAmount}px)` : 'none';
+        ctx.drawImage(mapSlice, 0, 0, canvasW, canvasH);
+        ctx.filter = 'none';
+        drawSmallBattleGrid(ctx, canvasW, canvasH);
+        ctx.drawImage(maskSlice, 0, 0, canvasW, canvasH);
+      }
+
+      function renderPlayer() {
+        if (!state.playerCtx || !state.playerCanvas || !state.playerWin || state.playerWin.closed) return;
+
+        const ctx = state.playerCtx;
+        const canvasW = state.playerCanvas.width;
+        const canvasH = state.playerCanvas.height;
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.filter = 'none';
+        ctx.clearRect(0, 0, canvasW, canvasH);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        if (state.playerCompassCanvas && state.playerCompassCtx) {
+          const overlay = state.playerCompassCanvas;
+          const overlayCtx = state.playerCompassCtx;
+          overlay.style.display = state.showCompass ? 'block' : 'none';
+          overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+          overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+          if (state.showCompass) {
+            drawCompassOverlay(overlayCtx, overlay.width, overlay.height, getPlayerDisplayRotation());
+          }
+        }
+
+        if (!hasMap()) return;
+
+        if (state.smallBattle.active && state.smallBattle.selection) {
+          renderSmallBattlemap(ctx, canvasW, canvasH);
+          ctx.filter = 'none';
+          return;
+        }
+
+        const t = getPlayerTransform();
+        if (!t) return;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.setTransform(t.scale, 0, 0, t.scale, t.drawX, t.drawY);
+        applyRotationTransform(ctx, state.mapRotation, state.mapWidth, state.mapHeight);
+        ctx.drawImage(state.mapImage, 0, 0);
+        ctx.drawImage(maskCanvas, 0, 0);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.filter = 'none';
+      }
+
+      function renderDM() {
+        dmCtx.setTransform(1, 0, 0, 1, 0, 0);
+        dmCtx.clearRect(0, 0, dmCanvas.width, dmCanvas.height);
+
+        if (!hasMap()) {
+          dmCtx.fillStyle = '#111';
+          dmCtx.fillRect(0, 0, dmCanvas.width, dmCanvas.height);
+          dmCtx.fillStyle = '#aaa';
+          dmCtx.font = '20px Arial';
+          dmCtx.fillText('Open a map to begin.', 24, 40);
+          return;
+        }
+
+        dmCtx.save();
+        applyRotationTransform(dmCtx, state.mapRotation, state.mapWidth, state.mapHeight);
+        dmCtx.drawImage(state.mapImage, 0, 0);
+        dmCtx.save();
+        dmCtx.globalAlpha = 120 / 255;
+        dmCtx.drawImage(maskCanvas, 0, 0);
+        dmCtx.restore();
+        drawSmallBattleSelection();
+        drawPreview();
+        dmCtx.restore();
+      }
+
+      function drawPreview() {
+        if (!state.preview) return;
+
+        dmCtx.save();
+        dmCtx.strokeStyle = '#00e5ff';
+        dmCtx.lineWidth = 2;
+        dmCtx.lineJoin = 'round';
+        dmCtx.lineCap = 'round';
+        dmCtx.setLineDash([]);
+
+        if (state.preview.type === 'rectangle' || state.preview.type === 'calibrate') {
+          const box = normalizedBox(state.preview.start, state.preview.end);
+          dmCtx.strokeRect(box.x1, box.y1, box.w, box.h);
+        } else if (state.preview.type === 'oval') {
+          const box = normalizedBox(state.preview.start, state.preview.end);
+          dmCtx.beginPath();
+          dmCtx.ellipse(box.x1 + box.w / 2, box.y1 + box.h / 2, Math.max(1, box.w / 2), Math.max(1, box.h / 2), 0, 0, Math.PI * 2);
+          dmCtx.stroke();
+        } else if (state.preview.type === 'brush') {
+          const pts = state.preview.points || [];
+          const r = Math.max(1, state.brushRadius);
+          if (pts.length <= 1) {
+            const p = pts[0];
+            if (p) {
+              dmCtx.beginPath();
+              dmCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+              dmCtx.stroke();
+            }
+          } else {
+            dmCtx.lineWidth = Math.max(2, r * 2);
+            dmCtx.beginPath();
+            dmCtx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i += 1) {
+              dmCtx.lineTo(pts[i].x, pts[i].y);
+            }
+            dmCtx.stroke();
+          }
+        }
+
+        dmCtx.restore();
+      }
+
+      function drawSmallBattleSelection() {
+        const selection = state.smallBattle.draftSelection || state.smallBattle.selection;
+        if (!selection) return;
+
+        const isDraft = !!state.smallBattle.draftSelection;
+        const label = isDraft ? 'Selecting Small Battlemap' : `Small Battlemap (${getSmallBattleRotationLabel()})`;
+        const labelWidth = isDraft ? 170 : 178;
+        const zoom = Math.max(0.25, Number(state.dmZoom) || 1);
+        const outlineWidth = clamp(2 / zoom, 1, 6);
+        const dashA = clamp(8 / zoom, 4, 18);
+        const dashB = clamp(6 / zoom, 3, 14);
+
+        dmCtx.save();
+        dmCtx.strokeStyle = isDraft ? '#ffe082' : (state.smallBattle.active ? '#ffd54a' : '#999');
+        dmCtx.lineWidth = outlineWidth;
+        dmCtx.setLineDash([dashA, dashB]);
+        dmCtx.strokeRect(selection.x1, selection.y1, selection.w, selection.h);
+        dmCtx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+        const labelY = Math.max(2, selection.y1 - 24);
+        dmCtx.fillRect(selection.x1 + 2, labelY, labelWidth, 20);
+        dmCtx.fillStyle = isDraft ? '#fff0b3' : '#ffd54a';
+        dmCtx.font = '12px Arial';
+        dmCtx.fillText(label, selection.x1 + 8, labelY + 14);
+        dmCtx.restore();
+      }
+
+      function applyShapeToMask(tool, start, end, points = null) {
+        if (!hasMap()) return;
+
+        const reveal = state.mode === 'reveal';
+        maskCtx.save();
+        maskCtx.globalCompositeOperation = reveal ? 'destination-out' : 'source-over';
+        maskCtx.fillStyle = '#000';
+        maskCtx.strokeStyle = '#000';
+        maskCtx.lineCap = 'round';
+        maskCtx.lineJoin = 'round';
+
+        if (tool === 'rectangle') {
+          const box = normalizedBox(start, end);
+          maskCtx.fillRect(box.x1, box.y1, Math.max(1, box.w), Math.max(1, box.h));
+        } else if (tool === 'oval') {
+          const box = normalizedBox(start, end);
+          maskCtx.beginPath();
+          maskCtx.ellipse(box.x1 + box.w / 2, box.y1 + box.h / 2, Math.max(1, box.w / 2), Math.max(1, box.h / 2), 0, 0, Math.PI * 2);
+          maskCtx.fill();
+        } else if (tool === 'brush') {
+          const pts = (points || []).slice();
+          const r = Math.max(1, state.brushRadius);
+          if (pts.length <= 1) {
+            const p = pts[0] || start;
+            maskCtx.beginPath();
+            maskCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            maskCtx.fill();
+          } else {
+            maskCtx.lineWidth = r * 2;
+            maskCtx.beginPath();
+            maskCtx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i += 1) {
+              maskCtx.lineTo(pts[i].x, pts[i].y);
+            }
+            maskCtx.stroke();
+            for (const p of pts) {
+              maskCtx.beginPath();
+              maskCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+              maskCtx.fill();
+            }
+          }
+        }
+
+        maskCtx.restore();
+        renderDM();
+        renderPlayer();
+      }
+
+      function centerPlayerOnMapPoint(point) {
+        if (!hasMap() || !state.playerCanvas) return;
+        const t = getPlayerTransform();
+        if (!t) return;
+
+        const rotatedPoint = originalToRotatedPoint(point);
+        const targetX = rotatedPoint.x * t.scale;
+        const targetY = rotatedPoint.y * t.scale;
+
+        state.playerViewX = t.renderedW > t.canvasW ? clamp(targetX - (t.canvasW / 2), 0, t.maxX) : 0;
+        state.playerViewY = t.renderedH > t.canvasH ? clamp(targetY - (t.canvasH / 2), 0, t.maxY) : 0;
+        renderPlayer();
+      }
+
+      function panPlayer(dx, dy) {
+        if (!hasMap()) return;
+        const t = getPlayerTransform();
+        if (!t) return;
+        state.playerViewX = clamp(state.playerViewX + dx, 0, t.maxX);
+        state.playerViewY = clamp(state.playerViewY + dy, 0, t.maxY);
+        renderPlayer();
+      }
+
+      function resetPlayerView() {
+        state.playerViewX = 0;
+        state.playerViewY = 0;
+        renderPlayer();
+      }
+
+      function revealAll() {
+        if (!hasMap()) return;
+        maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+        renderDM();
+        renderPlayer();
+        setStatus('All fog removed.');
+      }
+
+      function coverAll() {
+        if (!hasMap()) return;
+        maskCtx.globalCompositeOperation = 'source-over';
+        maskCtx.fillStyle = '#000';
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+        renderDM();
+        renderPlayer();
+        setStatus('Entire map covered in fog.');
+      }
+
+      function setPlayerFitMode() {
+        if (!hasMap()) return;
+        state.playerFitMode = true;
+        state.playerViewX = 0;
+        state.playerViewY = 0;
+        renderPlayer();
+        setStatus(`Player window set to fit mode. Player Scale is ${Math.round(state.playerScaleAdjust * 100)}% of the fitted size.`);
+      }
+
+      async function togglePlayerFullscreen() {
+        if (!ensurePlayerWindow(true)) return;
+        const doc = state.playerWin.document;
+        try {
+          if (doc.fullscreenElement) {
+            await doc.exitFullscreen();
+            setStatus('Player window fullscreen disabled.');
+          } else {
+            await doc.documentElement.requestFullscreen();
+            setStatus('Player window fullscreen enabled.');
+          }
+        } catch (error) {
+          console.error(error);
+          setStatus('The browser blocked fullscreen. Use the Fullscreen button inside the Player window instead.');
+        }
+      }
+
+      function applyGridCalibration(start, end) {
+        const dx = Math.abs(end.x - start.x);
+        const dy = Math.abs(end.y - start.y);
+        if (dx < 4 || dy < 4) {
+          setStatus('Calibration cancelled: drag over one full map square.');
+          return;
+        }
+
+        state.gridCellPx = (dx + dy) / 2;
+        state.playerFitMode = false;
+        state.playerViewX = 0;
+        state.playerViewY = 0;
+        updateGridLabel();
+        renderPlayer();
+
+        const ppi = getPlayerPixelsPerInch();
+        setStatus(`Grid calibrated at ${state.gridCellPx.toFixed(2)} px. Player scale updated to ~1 inch per square (${ppi.toFixed(1)} px per inch detected).`);
+
+        document.querySelector('input[name="tool"][value="rectangle"]').checked = true;
+        state.tool = 'rectangle';
+      }
+
+      function activateSmallBattleSelection(box) {
+        if (!box || box.w < 8 || box.h < 8) {
+          state.smallBattle.armed = false;
+          state.smallBattle.draftSelection = null;
+          setStatus('Small Screen Battlemap cancelled: drag a larger rectangle.');
+          renderDM();
+          return;
+        }
+
+        state.smallBattle.selection = box;
+        state.smallBattle.draftSelection = null;
+        state.smallBattle.active = true;
+        state.smallBattle.armed = false;
+        renderDM();
+        renderPlayer();
+        setStatus(`Small Screen Battlemap active: ${state.smallBattle.gridCols}×${state.smallBattle.gridRows} grid, ${getSmallBattleRotationLabel()}, blur ${state.smallBattle.blurPx.toFixed(2).replace(/\.00$/, '')} px.`);
+      }
+
+      function beginSmallBattleSelection() {
+        if (!hasMap()) {
+          setStatus('Open a map first.');
+          return;
+        }
+        state.smallBattle.armed = true;
+        state.smallBattle.draftSelection = null;
+        state.preview = null;
+        setStatus('Drag a rectangle on the map to define the Small Screen Battlemap area. The player view will stretch that area to the whole screen and keep using the current fog mask.');
+      }
+
+      function clearSmallBattleMode() {
+        state.smallBattle.armed = false;
+        state.smallBattle.active = false;
+        state.smallBattle.selection = null;
+        state.smallBattle.draftSelection = null;
+        renderDM();
+        renderPlayer();
+        if (hasMap()) {
+          setStatus('Small Screen Battlemap cleared. Player view returned to the normal map mode.');
+        }
+      }
+
+      function rotateSmallBattle(delta) {
+        state.smallBattle.rotation = (((state.smallBattle.rotation + delta) % 4) + 4) % 4;
+        renderDM();
+        renderPlayer();
+        if (state.smallBattle.selection) {
+          setStatus(`Small Screen Battlemap rotation set to ${getSmallBattleRotationLabel()}.`);
+        } else {
+          setStatus(`Small Screen Battlemap rotation queued: ${getSmallBattleRotationLabel()}. Select an area to apply it.`);
+        }
+      }
+
+      function serializeSession() {
+        return {
+          version: 4,
+          mapName: state.mapName,
+          mapDataUrl: state.mapDataUrl,
+          maskDataUrl: maskCanvas.toDataURL('image/png'),
+          gridCellPx: state.gridCellPx,
+          dmZoom: state.dmZoom,
+          mapRotation: state.mapRotation,
+          showCompass: state.showCompass,
+          playerFitMode: state.playerFitMode,
+          playerScaleAdjust: state.playerScaleAdjust,
+          playerViewX: state.playerViewX,
+          playerViewY: state.playerViewY,
+          pinnedMenus: { ...state.pinnedMenus },
+          smallBattle: {
+            active: state.smallBattle.active,
+            selection: state.smallBattle.selection,
+            rotation: state.smallBattle.rotation,
+            gridCols: state.smallBattle.gridCols,
+            gridRows: state.smallBattle.gridRows,
+            blurPx: state.smallBattle.blurPx,
+            gridColor: state.smallBattle.gridColor,
+            controlsCollapsed: state.smallBattle.controlsCollapsed,
+          },
+        };
+      }
+
+      function downloadTextFile(filename, text) {
+        const blob = new Blob([text], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function saveSession() {
+        if (!hasMap()) {
+          setStatus('Open a map first.');
+          return;
+        }
+        const base = (state.mapName || 'map').replace(/\.[^.]+$/, '');
+        downloadTextFile(`${base}.fow`, JSON.stringify(serializeSession()));
+        setStatus('Session state saved.');
+      }
+
+      async function loadSessionFile(file) {
+        try {
+          const text = await file.text();
+          const session = JSON.parse(text);
+          if (!session.mapDataUrl || !session.maskDataUrl) {
+            throw new Error('Invalid session file.');
+          }
+
+          const mapImg = await loadImageFromDataUrl(session.mapDataUrl);
+          const maskImg = await loadImageFromDataUrl(session.maskDataUrl);
+
+          state.mapImage = mapImg;
+          state.mapName = session.mapName || file.name || 'map';
+          state.mapDataUrl = session.mapDataUrl;
+          state.mapWidth = mapImg.naturalWidth || mapImg.width;
+          state.mapHeight = mapImg.naturalHeight || mapImg.height;
+
+          maskCanvas.width = state.mapWidth;
+          maskCanvas.height = state.mapHeight;
+          maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+          maskCtx.globalCompositeOperation = 'source-over';
+          maskCtx.drawImage(maskImg, 0, 0, maskCanvas.width, maskCanvas.height);
+
+          state.gridCellPx = Number.isFinite(session.gridCellPx) ? session.gridCellPx : (typeof session.gridCellPx === 'number' ? session.gridCellPx : null);
+          state.dmZoom = Number.isFinite(session.dmZoom) ? clamp(session.dmZoom, 0.25, 3) : 1;
+          state.mapRotation = Number.isFinite(session.mapRotation) ? getRotationTurns(session.mapRotation) : 0;
+          state.showCompass = !!session.showCompass;
+          state.playerFitMode = typeof session.playerFitMode === 'boolean' ? session.playerFitMode : true;
+          state.playerScaleAdjust = Number.isFinite(session.playerScaleAdjust) ? clamp(session.playerScaleAdjust, 0.25, 3) : 1;
+          state.playerViewX = Number.isFinite(session.playerViewX) ? session.playerViewX : 0;
+          state.playerViewY = Number.isFinite(session.playerViewY) ? session.playerViewY : 0;
+          state.dragging = false;
+          state.dragStart = null;
+          state.strokePoints = [];
+          state.preview = null;
+          state.smallBattle.armed = false;
+          state.smallBattle.draftSelection = null;
+
+          const savedPinnedMenus = session.pinnedMenus || {};
+          for (const menuKey of Object.keys(state.pinnedMenus)) {
+            state.pinnedMenus[menuKey] = !!savedPinnedMenus[menuKey];
+          }
+
+          const savedSmallBattle = session.smallBattle || {};
+          state.smallBattle.active = !!savedSmallBattle.active;
+          state.smallBattle.selection = savedSmallBattle.selection && typeof savedSmallBattle.selection.x1 === 'number'
+            ? {
+                x1: savedSmallBattle.selection.x1,
+                y1: savedSmallBattle.selection.y1,
+                x2: savedSmallBattle.selection.x2,
+                y2: savedSmallBattle.selection.y2,
+                w: savedSmallBattle.selection.w,
+                h: savedSmallBattle.selection.h,
+              }
+            : null;
+          state.smallBattle.rotation = Number.isFinite(savedSmallBattle.rotation) ? (((savedSmallBattle.rotation % 4) + 4) % 4) : 0;
+          state.smallBattle.gridCols = sanitizePositiveInt(savedSmallBattle.gridCols, state.smallBattle.gridCols);
+          state.smallBattle.gridRows = sanitizePositiveInt(savedSmallBattle.gridRows, state.smallBattle.gridRows);
+          state.smallBattle.blurPx = clamp(Number(savedSmallBattle.blurPx), 0, 12);
+          if (!Number.isFinite(state.smallBattle.blurPx)) state.smallBattle.blurPx = 1.5;
+          state.smallBattle.gridColor = savedSmallBattle.gridColor === 'black' ? 'black' : 'white';
+          state.smallBattle.controlsCollapsed = !!savedSmallBattle.controlsCollapsed;
+          if (!state.smallBattle.selection) {
+            state.smallBattle.active = false;
+          }
+
+          updateRotatedCanvasSize();
+          updateGridLabel();
+          updateDMZoomLabel();
+          updateMapRotationLabel();
+          updatePlayerScaleLabel();
+          updateBattleBlurLabel();
+          applyDMZoom(false);
+          dmZoomSlider.value = String(Math.round(state.dmZoom * 100));
+          playerScaleSlider.value = String(Math.round(state.playerScaleAdjust * 100));
+          battleColsInput.value = String(state.smallBattle.gridCols);
+          battleRowsInput.value = String(state.smallBattle.gridRows);
+          battleBlurSlider.value = String(state.smallBattle.blurPx);
+          const gridRadio = document.querySelector(`input[name="battleGridColor"][value="${state.smallBattle.gridColor}"]`);
+          if (gridRadio) gridRadio.checked = true;
+          compassToggle.checked = state.showCompass;
+          syncSmallBattleControlsUI();
+          syncPinnedMenusUI();
+          ensurePlayerWindow(false);
+          renderDM();
+          renderPlayer();
+          startupModal.classList.add('hidden');
+          setStatus(`Loaded session state from ${file.name}.`);
+        } catch (error) {
+          console.error(error);
+          alert('Could not load that session file.');
+          setStatus('Could not load that session file.');
+        }
+      }
+
+      function handlePointerDown(event) {
+        if (!hasMap()) return;
+        if (event.button !== 0) return;
+
+        const point = canvasPointFromEvent(event);
+        const activeTool = state.smallBattle.armed ? 'battleSelect' : state.tool;
+        state.dragging = true;
+        state.dragStart = point;
+        state.strokePoints = [point];
+        if (state.smallBattle.armed) {
+          state.smallBattle.draftSelection = normalizedBox(point, point);
+          state.preview = null;
+        } else {
+          state.preview = { type: activeTool, start: point, end: point, points: [point] };
+          centerPlayerOnMapPoint(point);
+        }
+        renderDM();
+        event.preventDefault();
+      }
+
+      function handlePointerMove(event) {
+        if (!hasMap() || !state.dragging || !state.dragStart) return;
+        const point = canvasPointFromEvent(event);
+
+        if (state.smallBattle.armed) {
+          state.smallBattle.draftSelection = normalizedBox(state.dragStart, point);
+          state.preview = null;
+        } else if (state.tool === 'brush') {
+          state.strokePoints.push(point);
+          state.preview = { type: 'brush', start: state.dragStart, end: point, points: state.strokePoints.slice() };
+        } else {
+          state.preview = { type: state.tool, start: state.dragStart, end: point };
+        }
+
+        renderDM();
+        event.preventDefault();
+      }
+
+      function handlePointerUp(event) {
+        if (!hasMap() || !state.dragging || !state.dragStart) return;
+        const point = canvasPointFromEvent(event);
+        const start = state.dragStart;
+        const tool = state.tool;
+        const points = state.strokePoints.slice();
+        const wasSelectingSmallBattle = state.smallBattle.armed;
+
+        state.dragging = false;
+        state.dragStart = null;
+        state.preview = null;
+        state.strokePoints = [];
+
+        if (wasSelectingSmallBattle) {
+          const box = state.smallBattle.draftSelection || normalizedBox(start, point);
+          activateSmallBattleSelection(box);
+        } else if (tool === 'calibrate') {
+          applyGridCalibration(start, point);
+        } else {
+          applyShapeToMask(tool, start, point, points);
+        }
+
+        renderDM();
+        event.preventDefault();
+      }
+
+      function chooseMap() {
+        mapInput.value = '';
+        mapInput.click();
+      }
+
+      function chooseSession() {
+        sessionInput.value = '';
+        sessionInput.click();
+      }
+
+      async function startWorkflow() {
+        ensurePlayerWindow(false);
+        chooseMap();
+      }
+
+      document.getElementById('startBtn').addEventListener('click', startWorkflow);
+      document.getElementById('modalStartBtn').addEventListener('click', startWorkflow);
+      document.getElementById('openMapBtn').addEventListener('click', chooseMap);
+      document.getElementById('saveBtn').addEventListener('click', saveSession);
+      document.getElementById('loadBtn').addEventListener('click', chooseSession);
+      document.getElementById('openPlayerBtn').addEventListener('click', () => ensurePlayerWindow(true));
+      document.getElementById('modalPlayerBtn').addEventListener('click', () => ensurePlayerWindow(true));
+      document.getElementById('fullscreenBtn').addEventListener('click', togglePlayerFullscreen);
+      document.getElementById('fitBtn').addEventListener('click', setPlayerFitMode);
+      document.getElementById('revealAllBtn').addEventListener('click', revealAll);
+      document.getElementById('coverAllBtn').addEventListener('click', coverAll);
+      document.getElementById('smallBattleBtn').addEventListener('click', beginSmallBattleSelection);
+      document.getElementById('clearSmallBattleBtn').addEventListener('click', clearSmallBattleMode);
+      document.getElementById('battleRotateCcwBtn').addEventListener('click', () => rotateSmallBattle(-1));
+      document.getElementById('battleRotateCwBtn').addEventListener('click', () => rotateSmallBattle(1));
+      document.getElementById('mapRotateCcwBtn').addEventListener('click', () => applyGlobalMapRotation(-1));
+      document.getElementById('mapRotateCwBtn').addEventListener('click', () => applyGlobalMapRotation(1));
+      toggleSmallBattleControlsBtn.addEventListener('click', () => {
+        state.smallBattle.controlsCollapsed = !state.smallBattle.controlsCollapsed;
+        syncSmallBattleControlsUI();
+        setStatus(`Small Screen Battlemap controls ${state.smallBattle.controlsCollapsed ? 'collapsed' : 'expanded'}.`);
+      });
+      compassToggle.addEventListener('change', () => {
+        state.showCompass = compassToggle.checked;
+        renderPlayer();
+        setStatus(`Compass rose ${state.showCompass ? 'enabled' : 'disabled'} on the player view.`);
+      });
+      document.getElementById('panLeftBtn').addEventListener('click', () => panPlayer(-120, 0));
+      document.getElementById('panUpBtn').addEventListener('click', () => panPlayer(0, -120));
+      document.getElementById('panDownBtn').addEventListener('click', () => panPlayer(0, 120));
+      document.getElementById('panRightBtn').addEventListener('click', () => panPlayer(120, 0));
+      document.getElementById('resetViewBtn').addEventListener('click', resetPlayerView);
+
+      brushRadiusInput.addEventListener('input', () => {
+        const value = parseInt(brushRadiusInput.value, 10);
+        state.brushRadius = clamp(Number.isFinite(value) ? value : 35, 5, 300);
+        brushRadiusInput.value = String(state.brushRadius);
+      });
+
+      dmZoomSlider.addEventListener('input', () => {
+        const value = parseInt(dmZoomSlider.value, 10);
+        state.dmZoom = clamp((Number.isFinite(value) ? value : 100) / 100, 0.25, 3);
+        applyDMZoom();
+        if (hasMap()) {
+          setStatus(`DM map zoom set to ${Math.round(state.dmZoom * 100)}%.`);
+        }
+      });
+
+      playerScaleSlider.addEventListener('input', () => {
+        const value = parseInt(playerScaleSlider.value, 10);
+        state.playerScaleAdjust = clamp((Number.isFinite(value) ? value : 100) / 100, 0.25, 3);
+        updatePlayerScaleLabel();
+        renderPlayer();
+
+        if (hasMap()) {
+          const scaleText = `${Math.round(state.playerScaleAdjust * 100)}%`;
+          if (state.smallBattle.active) {
+            setStatus(`Player Scale set to ${scaleText}. Small Screen Battlemap is active, so the player display stays stretched to the selected battlemap area until you clear it.`);
+          } else if (state.playerFitMode) {
+            setStatus(`Player Scale set to ${scaleText} of the fitted map size.`);
+          } else if (state.gridCellPx) {
+            setStatus(`Player Scale set to ${scaleText} of the calibrated size.`);
+          } else {
+            setStatus(`Player Scale set to ${scaleText}.`);
+          }
+        }
+      });
+
+      battleColsInput.addEventListener('input', () => {
+        state.smallBattle.gridCols = sanitizePositiveInt(battleColsInput.value, state.smallBattle.gridCols);
+        battleColsInput.value = String(state.smallBattle.gridCols);
+        renderPlayer();
+        if (state.smallBattle.active) {
+          setStatus(`Small Screen Battlemap grid width set to ${state.smallBattle.gridCols}.`);
+        }
+      });
+
+      battleRowsInput.addEventListener('input', () => {
+        state.smallBattle.gridRows = sanitizePositiveInt(battleRowsInput.value, state.smallBattle.gridRows);
+        battleRowsInput.value = String(state.smallBattle.gridRows);
+        renderPlayer();
+        if (state.smallBattle.active) {
+          setStatus(`Small Screen Battlemap grid height set to ${state.smallBattle.gridRows}.`);
+        }
+      });
+
+      battleBlurSlider.addEventListener('input', () => {
+        const value = Number.parseFloat(battleBlurSlider.value);
+        state.smallBattle.blurPx = clamp(Number.isFinite(value) ? value : 0, 0, 12);
+        battleBlurSlider.value = String(state.smallBattle.blurPx);
+        updateBattleBlurLabel();
+        renderPlayer();
+        if (state.smallBattle.active) {
+          setStatus(`Small Screen Battlemap blur set to ${state.smallBattle.blurPx.toFixed(2).replace(/\.00$/, '')} px.`);
+        }
+      });
+
+      document.querySelectorAll('input[name="battleGridColor"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.smallBattle.gridColor = input.value === 'black' ? 'black' : 'white';
+            renderPlayer();
+            if (state.smallBattle.active) {
+              setStatus(`Small Screen Battlemap grid color set to ${state.smallBattle.gridColor}.`);
+            }
+          }
+        });
+      });
+
+      document.querySelectorAll('input[name="tool"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.tool = input.value;
+          }
+        });
+      });
+
+      document.querySelectorAll('input[name="mode"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.mode = input.value;
+          }
+        });
+      });
+
+      mapInput.addEventListener('change', async () => {
+        const file = mapInput.files && mapInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          await loadMapData(reader.result, file.name);
+        };
+        reader.onerror = () => {
+          setStatus('Could not read that file.');
+        };
+        reader.readAsDataURL(file);
+      });
+
+      sessionInput.addEventListener('change', async () => {
+        const file = sessionInput.files && sessionInput.files[0];
+        if (!file) return;
+        await loadSessionFile(file);
+      });
+
+      dmCanvas.addEventListener('pointerdown', handlePointerDown);
+      dmCanvas.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', (event) => {
+        if (event.target === dmCanvas || state.dragging) {
+          handlePointerUp(event);
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        renderDM();
+        renderPlayer();
+      });
+
+      menuPinToggles.forEach((toggle) => {
+        toggle.addEventListener('change', () => {
+          setMenuPinned(toggle.dataset.menuKey, toggle.checked);
+          setStatus(`${toggle.closest('.menu')?.querySelector('summary')?.textContent || 'Menu'} ${toggle.checked ? 'pinned below the menu bar.' : 'returned to its dropdown only.'}`);
+        });
+      });
+
+      undockMenuButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const card = button.closest('.pinned-menu-card');
+          setMenuPinned(button.dataset.menuKey, false);
+          if (card) {
+            const menu = document.querySelector(`.menu[data-menu-key="${button.dataset.menuKey}"]`);
+            if (menu) menu.open = true;
+          }
+          setStatus(`${button.closest('.pinned-menu-card')?.querySelector('.pinned-menu-head span')?.textContent || 'Panel'} returned to its dropdown.`);
+        });
+      });
+
+      menuDropdowns.forEach((menu) => {
+        menu.addEventListener('toggle', () => {
+          if (menu.open) {
+            closeAllMenus(menu);
+          }
+        });
+      });
+
+      document.addEventListener('pointerdown', (event) => {
+        if (!event.target.closest('.menu')) {
+          closeAllMenus();
+        }
+      });
+
+      battleColsInput.value = String(state.smallBattle.gridCols);
+      battleRowsInput.value = String(state.smallBattle.gridRows);
+      battleBlurSlider.value = String(state.smallBattle.blurPx);
+      compassToggle.checked = state.showCompass;
+      updateDMZoomLabel();
+      updateMapRotationLabel();
+      updatePlayerScaleLabel();
+      updateBattleBlurLabel();
+      syncSmallBattleControlsUI();
+      syncPinnedMenusUI();
+      applyDMZoom(false);
+      renderDM();
+    })();
+  </script>
+</body>
+</html>
